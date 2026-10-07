@@ -15,42 +15,59 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build 32-bit Alpine zsign for iSH
+      - name: Build iSH-compatible zsign
         run: |
           set -euxo pipefail
+          rm -rf out
           mkdir -p out
+
           docker run --rm --platform linux/386             -v "$PWD/out:/out"             alpine:3.14 sh -lc '
               set -eux
-              apk add --no-cache build-base git pkgconf openssl-dev zlib-dev wget tar sed findutils
+
+              apk add --no-cache                 build-base                 pkgconf                 openssl-dev                 zlib-dev                 wget                 tar                 sed                 findutils                 file
+
               cd /tmp
-              wget -O zsign.tar.gz https://github.com/zhlynn/zsign/archive/refs/tags/v1.1.2.tar.gz
+              wget -O zsign.tar.gz                 https://github.com/zhlynn/zsign/archive/refs/tags/v1.1.2.tar.gz
               tar xzf zsign.tar.gz
 
-              ROOT="$(find /tmp -maxdepth 5 -type f -path "*/build/linux/Makefile" -print | head -n1 | sed "s#/build/linux/Makefile##")"
+              ROOT="$(find /tmp -maxdepth 6 -type f -path "*/build/linux/Makefile" -print | head -n1 | sed "s#/build/linux/Makefile##")"
               test -n "$ROOT"
-              echo "zsign root: $ROOT"
+              echo "Using source root: $ROOT"
 
-              CERTCHECK="$(find "$ROOT" -type f -path "*/src/certcheck.cpp" -print | head -n1)"
-              OPENSSLCPP="$(find "$ROOT" -type f -path "*/src/openssl.cpp" -print | head -n1)"
-              test -n "$CERTCHECK"
-              test -n "$OPENSSLCPP"
+              CERTCHECK="$ROOT/src/certcheck.cpp"
+              OPENSSLCPP="$ROOT/src/openssl.cpp"
+              test -f "$CERTCHECK"
+              test -f "$OPENSSLCPP"
 
-              sed -i "/#include <openssl\/provider.h>/d" "$CERTCHECK"
-              sed -i "/OSSL_PROVIDER_load(NULL, \"default\");/d" "$CERTCHECK"
-              sed -i "/OSSL_PROVIDER_load(NULL, \"legacy\");/d" "$CERTCHECK"
-              sed -i "/OSSL_PROVIDER_load(NULL, \"legacy\");/d" "$OPENSSLCPP"
+              # zsign 1.1.2 contains OpenSSL 3 provider API calls.
+              # iSH Alpine 3.14 ships OpenSSL 1.1.1, so strip only those
+              # optional provider references.
+              sed -i "/openssl\/provider.h/d" "$CERTCHECK"
+              sed -i "/openssl\/provider.h/d" "$OPENSSLCPP"
+              sed -i "/OSSL_PROVIDER_load/d" "$CERTCHECK"
+              sed -i "/OSSL_PROVIDER_load/d" "$OPENSSLCPP"
+
+              # Verify the OpenSSL 3-only symbols are gone before compiling.
+              ! grep -R "openssl/provider.h\|OSSL_PROVIDER_load" "$ROOT/src"
 
               cd "$ROOT/build/linux"
-              make VERSION=1.1.2 CXXFLAGS="-std=c++11 -O3 -Wno-unused-result -MMD -MP -fpermissive"
+              make clean || true
+              make VERSION=1.1.2                 CXXFLAGS="-std=c++11 -O2 -Wno-unused-result -MMD -MP -fpermissive"
+
+              test -x "$ROOT/bin/zsign"
               cp "$ROOT/bin/zsign" /out/zsign
               chmod +x /out/zsign
+
+              echo "Built binary:"
+              file /out/zsign
+              ldd /out/zsign || true
               /out/zsign -v || true
             '
 
       - name: Package artifact
         run: |
-          cd out
-          tar czf ../zsign-ish-alpine-x86.tar.gz zsign
+          test -x out/zsign
+          tar czf zsign-ish-alpine-x86.tar.gz -C out zsign
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
