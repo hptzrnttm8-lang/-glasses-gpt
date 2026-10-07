@@ -22,14 +22,9 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.GlassesGPT
         SWIFT_VERSION: "6.0"
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: GlassesGPT
-        INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription: Connect to Meta AI glasses.
-        INFOPLIST_KEY_NSMicrophoneUsageDescription: Use speech from Meta AI glasses for hands-free questions.
-        INFOPLIST_KEY_NSLocalNetworkUsageDescription: Connect to Meta AI glasses over the local network.
+        INFOPLIST_FILE: ios/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
         CODE_SIGN_STYLE: Automatic
     dependencies:
       - package: MetaWearablesDAT
         product: MWDATCore
-      - package: MetaWearablesDAT
-        product: MWDATSpeech
