@@ -21,15 +21,25 @@ jobs:
           mkdir -p out
           docker run --rm --platform linux/386             -v "$PWD/out:/out"             alpine:3.14 sh -lc '
               set -eux
-              apk add --no-cache build-base git pkgconf openssl-dev zlib-dev wget tar
+              apk add --no-cache build-base git pkgconf openssl-dev zlib-dev wget tar sed
               cd /tmp
               wget -O zsign.tar.gz https://github.com/zhlynn/zsign/archive/refs/tags/v1.1.2.tar.gz
               tar xzf zsign.tar.gz
-              cd zsign-1.1.2/build/linux
+              cd zsign-1.1.2
+
+              # iSH Alpine 3.14 uses OpenSSL 1.1.1. zsign 1.1.2 contains
+              # optional OpenSSL 3 provider calls; remove those calls so the
+              # binary can compile against iSH's OpenSSL 1.1.1.
+              sed -i "/#include <openssl\/provider.h>/d" src/certcheck.cpp
+              sed -i "/OSSL_PROVIDER_load(NULL, \"default\");/d" src/certcheck.cpp
+              sed -i "/OSSL_PROVIDER_load(NULL, \"legacy\");/d" src/certcheck.cpp
+              sed -i "/OSSL_PROVIDER_load(NULL, \"legacy\");/d" src/openssl.cpp
+
+              cd build/linux
               make VERSION=1.1.2
               cp ../../bin/zsign /out/zsign
               chmod +x /out/zsign
-              file /out/zsign || true
+              /out/zsign -v || true
             '
 
       - name: Package artifact
