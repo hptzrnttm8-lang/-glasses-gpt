@@ -41,7 +41,7 @@ jobs:
               sed -i "/OSSL_PROVIDER_load(NULL, \"legacy\");/d" "$OPENSSLCPP"
 
               cd "$ROOT/build/linux"
-              make VERSION=1.1.2
+              make VERSION=1.1.2 CXXFLAGS="-std=c++11 -O3 -Wno-unused-result -MMD -MP -fpermissive"
               cp "$ROOT/bin/zsign" /out/zsign
               chmod +x /out/zsign
               /out/zsign -v || true
