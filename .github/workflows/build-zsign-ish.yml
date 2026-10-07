@@ -26,7 +26,7 @@ jobs:
               wget -O zsign.tar.gz https://github.com/zhlynn/zsign/archive/refs/tags/v1.1.2.tar.gz
               tar xzf zsign.tar.gz
 
-              ROOT="$(find /tmp -maxdepth 2 -type f -path "*/build/linux/Makefile" -print | head -n1 | sed "s#/build/linux/Makefile##")"
+              ROOT="$(find /tmp -maxdepth 5 -type f -path "*/build/linux/Makefile" -print | head -n1 | sed "s#/build/linux/Makefile##")"
               test -n "$ROOT"
               echo "zsign root: $ROOT"
 
