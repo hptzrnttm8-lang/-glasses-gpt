@@ -8,7 +8,7 @@ options:
 packages:
   MetaWearablesDAT:
     url: https://github.com/facebook/meta-wearables-dat-ios
-    branch: main
+    from: 1.0.0
 
 targets:
   GlassesGPT:
