@@ -2,63 +2,54 @@ import Foundation
 
 @MainActor
 final class AssistantController: ObservableObject {
-    @Published var metaStatus = "Starting…"
-    @Published var assistantStatus = "Idle"
+    @Published var metaStatus = "Not registered"
+    @Published var assistantStatus = "Voice test stopped"
     @Published var lastHeard = ""
     @Published var lastAnswer = ""
     @Published var lastError: String?
 
     private let meta = MetaWearablesBridge()
-    private let backend = OpenAIBackendClient()
-    private let speechOutput = SpeechOutput()
-
-    func start() async {
-        do {
-            metaStatus = "Watching for glasses"
-            try await meta.start { [weak self] text in
-                guard let self else { return }
-                await self.handleFinalTranscript(text)
-            }
-            metaStatus = "Ready"
-        } catch {
-            await report(error)
-        }
-    }
 
     func registerWithMeta() async {
         do {
+            lastError = nil
+            metaStatus = "Opening Meta AI…"
             try await meta.register()
-            metaStatus = "Registered"
+            metaStatus = "Registration requested"
         } catch {
             await report(error)
         }
     }
 
-    func requestMicrophonePermission() async {
+    func startVoiceInvocationTest() async {
         do {
-            try await meta.requestMicrophonePermission()
-            metaStatus = "Microphone granted"
+            lastError = nil
+            assistantStatus = "Waiting for glasses…"
+
+            try await meta.startVoiceInvocationTest(
+                onReady: { [weak self] deviceIdentifier in
+                    self?.assistantStatus = "Listening on \(deviceIdentifier)"
+                },
+                onLaunch: { [weak self] delivered in
+                    guard let self else { return }
+                    self.lastAnswer = delivered
+                        ? "✅ Hey Meta launched GlassesGPT"
+                        : "⚠️ Launch arrived, but acknowledgement failed"
+                    self.assistantStatus = "Invocation received"
+                },
+                onError: { [weak self] message in
+                    self?.lastError = message
+                    self?.assistantStatus = "Voice invocation error"
+                }
+            )
         } catch {
             await report(error)
         }
     }
 
-    private func handleFinalTranscript(_ text: String) async {
-        let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !cleaned.isEmpty else { return }
-
-        lastHeard = cleaned
-        assistantStatus = "Thinking…"
-
-        do {
-            let answer = try await backend.ask(cleaned)
-            lastAnswer = answer
-            assistantStatus = "Speaking"
-            try speechOutput.speak(answer)
-            assistantStatus = "Ready"
-        } catch {
-            await report(error)
-        }
+    func stopVoiceInvocationTest() {
+        meta.stopVoiceInvocationTest()
+        assistantStatus = "Voice test stopped"
     }
 
     func report(_ error: Error) async {
