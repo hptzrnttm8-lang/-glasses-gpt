@@ -21,23 +21,28 @@ jobs:
           mkdir -p out
           docker run --rm --platform linux/386             -v "$PWD/out:/out"             alpine:3.14 sh -lc '
               set -eux
-              apk add --no-cache build-base git pkgconf openssl-dev zlib-dev wget tar sed
+              apk add --no-cache build-base git pkgconf openssl-dev zlib-dev wget tar sed findutils
               cd /tmp
               wget -O zsign.tar.gz https://github.com/zhlynn/zsign/archive/refs/tags/v1.1.2.tar.gz
               tar xzf zsign.tar.gz
-              cd zsign-1.1.2
 
-              # iSH Alpine 3.14 uses OpenSSL 1.1.1. zsign 1.1.2 contains
-              # optional OpenSSL 3 provider calls; remove those calls so the
-              # binary can compile against iSH's OpenSSL 1.1.1.
-              sed -i "/#include <openssl\/provider.h>/d" src/certcheck.cpp
-              sed -i "/OSSL_PROVIDER_load(NULL, \"default\");/d" src/certcheck.cpp
-              sed -i "/OSSL_PROVIDER_load(NULL, \"legacy\");/d" src/certcheck.cpp
-              sed -i "/OSSL_PROVIDER_load(NULL, \"legacy\");/d" src/openssl.cpp
+              ROOT="$(find /tmp -maxdepth 2 -type f -path "*/build/linux/Makefile" -print | head -n1 | sed "s#/build/linux/Makefile##")"
+              test -n "$ROOT"
+              echo "zsign root: $ROOT"
 
-              cd build/linux
+              CERTCHECK="$(find "$ROOT" -type f -path "*/src/certcheck.cpp" -print | head -n1)"
+              OPENSSLCPP="$(find "$ROOT" -type f -path "*/src/openssl.cpp" -print | head -n1)"
+              test -n "$CERTCHECK"
+              test -n "$OPENSSLCPP"
+
+              sed -i "/#include <openssl\/provider.h>/d" "$CERTCHECK"
+              sed -i "/OSSL_PROVIDER_load(NULL, \"default\");/d" "$CERTCHECK"
+              sed -i "/OSSL_PROVIDER_load(NULL, \"legacy\");/d" "$CERTCHECK"
+              sed -i "/OSSL_PROVIDER_load(NULL, \"legacy\");/d" "$OPENSSLCPP"
+
+              cd "$ROOT/build/linux"
               make VERSION=1.1.2
-              cp ../../bin/zsign /out/zsign
+              cp "$ROOT/bin/zsign" /out/zsign
               chmod +x /out/zsign
               /out/zsign -v || true
             '
