@@ -1,0 +1,45 @@
+name: Build zsign for iSH
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+    paths:
+      - ".github/workflows/build-zsign-ish.yml"
+
+jobs:
+  build-zsign-ish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build 32-bit Alpine zsign for iSH
+        run: |
+          set -euxo pipefail
+          mkdir -p out
+          docker run --rm --platform linux/386             -v "$PWD/out:/out"             alpine:3.14 sh -lc '
+              set -eux
+              apk add --no-cache build-base git pkgconf openssl-dev zlib-dev wget tar
+              cd /tmp
+              wget -O zsign.tar.gz https://github.com/zhlynn/zsign/archive/refs/tags/v1.1.2.tar.gz
+              tar xzf zsign.tar.gz
+              cd zsign-1.1.2/build/linux
+              make VERSION=1.1.2
+              cp ../../bin/zsign /out/zsign
+              chmod +x /out/zsign
+              file /out/zsign || true
+            '
+
+      - name: Package artifact
+        run: |
+          cd out
+          tar czf ../zsign-ish-alpine-x86.tar.gz zsign
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zsign-ish-alpine-x86
+          path: zsign-ish-alpine-x86.tar.gz
+          retention-days: 7
