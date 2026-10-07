@@ -17,10 +17,14 @@ struct GlassesGPTApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(controller)
-                .task {
-                    await controller.start()
-                }
                 .onOpenURL { url in
+                    guard
+                        let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+                        components.queryItems?.contains(where: { $0.name == "metaWearablesAction" }) == true
+                    else {
+                        return
+                    }
+
                     Task {
                         do {
                             _ = try await Wearables.shared.handleUrl(url)
