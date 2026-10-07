@@ -8,27 +8,32 @@ struct ContentView: View {
             Form {
                 Section("Status") {
                     LabeledContent("Meta", value: controller.metaStatus)
-                    LabeledContent("Assistant", value: controller.assistantStatus)
+                    LabeledContent("Voice invocation", value: controller.assistantStatus)
                 }
 
-                Section("One-time setup") {
-                    Button("Register with Meta") {
+                Section("Step 1") {
+                    Button("Register with Meta AI") {
                         Task { await controller.registerWithMeta() }
                     }
+                }
 
-                    Button("Grant microphone permission") {
-                        Task { await controller.requestMicrophonePermission() }
+                Section("Step 2") {
+                    Button("Start Hey Meta test") {
+                        Task { await controller.startVoiceInvocationTest() }
+                    }
+
+                    Button("Stop test", role: .destructive) {
+                        controller.stopVoiceInvocationTest()
                     }
                 }
 
-                if !controller.lastHeard.isEmpty {
-                    Section("Last heard") {
-                        Text(controller.lastHeard)
-                    }
+                Section("Say to the glasses") {
+                    Text("“Hey Meta, start GlassesGPT”")
+                        .font(.headline)
                 }
 
                 if !controller.lastAnswer.isEmpty {
-                    Section("Last answer") {
+                    Section("Result") {
                         Text(controller.lastAnswer)
                     }
                 }
@@ -40,7 +45,7 @@ struct ContentView: View {
                     }
                 }
             }
-            .navigationTitle("Glasses GPT")
+            .navigationTitle("GlassesGPT Test")
         }
     }
 }
