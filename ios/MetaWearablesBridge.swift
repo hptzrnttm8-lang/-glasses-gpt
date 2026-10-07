@@ -1,40 +1,64 @@
 import Foundation
 import MWDATCore
-import MWDATSpeech
 
-final class MetaWearablesBridge: @unchecked Sendable {
-    typealias FinalTranscriptHandler = @Sendable (String) async -> Void
-
-    private var transcriptHandler: FinalTranscriptHandler?
-    private var retainedTokens: [Any] = []
+@MainActor
+final class MetaWearablesBridge {
+    private var voiceStream: VoiceInvocationsStream?
+    private var invocationToken: AnyListenerToken?
+    private var errorToken: AnyListenerToken?
+    private var deviceTask: Task<Void, Never>?
 
     func register() async throws {
         try await Wearables.shared.startRegistration()
     }
 
-    func requestMicrophonePermission() async throws {
-        throw BridgeError.finishDATPermissionBinding
-    }
+    func startVoiceInvocationTest(
+        onReady: @escaping @MainActor (DeviceIdentifier) -> Void,
+        onLaunch: @escaping @MainActor (Bool) -> Void,
+        onError: @escaping @MainActor (String) -> Void
+    ) async throws {
+        stopVoiceInvocationTest()
 
-    func start(onFinalTranscript: @escaping FinalTranscriptHandler) async throws {
-        self.transcriptHandler = onFinalTranscript
-        throw BridgeError.finishDATVoiceInvocationBinding
-    }
-}
+        let stream = try VoiceInvocationsStream(wearables: Wearables.shared)
+        voiceStream = stream
 
-enum BridgeError: LocalizedError {
-    case microphoneDenied
-    case finishDATPermissionBinding
-    case finishDATVoiceInvocationBinding
-
-    var errorDescription: String? {
-        switch self {
-        case .microphoneDenied:
-            return "Meta glasses microphone permission was denied."
-        case .finishDATPermissionBinding:
-            return "Bind requestMicrophonePermission() to the exact DAT permission API installed in Xcode."
-        case .finishDATVoiceInvocationBinding:
-            return "Bind VoiceInvocationsStream + MWDATSpeech to the exact DAT symbols installed in Xcode."
+        invocationToken = stream.invocationsPublisher.listen { invocation in
+            guard let launch = invocation as? LaunchApp else { return }
+            Task { @MainActor in
+                let delivered = await launch.responseHandle.sendSuccess(actionOutput: nil)
+                onLaunch(delivered)
+            }
         }
+
+        errorToken = stream.errorPublisher.listen { error in
+            Task { @MainActor in
+                onError(String(describing: error))
+            }
+        }
+
+        deviceTask = Task { @MainActor [weak self] in
+            for await identifiers in Wearables.shared.devicesStream() {
+                guard !Task.isCancelled else { return }
+                guard let identifier = identifiers.first else { continue }
+                guard let self, let stream = self.voiceStream else { return }
+
+                do {
+                    try stream.start(deviceIdentifier: identifier)
+                    onReady(identifier)
+                    return
+                } catch {
+                    onError(error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    func stopVoiceInvocationTest() {
+        deviceTask?.cancel()
+        deviceTask = nil
+        voiceStream?.stop()
+        voiceStream = nil
+        invocationToken = nil
+        errorToken = nil
     }
 }
